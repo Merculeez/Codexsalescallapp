@@ -14,18 +14,22 @@ export default function ChecklistCards({ results, activeTopicId, onTopicClick }:
       {results.map((result) => {
         const isActive = activeTopicId === result.topic.id;
         const { topic, passed, matches } = result;
+        const missNeutral = !passed && (topic as { missNeutral?: boolean }).missNeutral;
+        const missLabel = (topic as { missLabel?: string }).missLabel ?? "FAIL";
 
         return (
           <button
             key={topic.id}
             onClick={() => onTopicClick(topic.id)}
             className={`
-              w-full text-left rounded-xl border p-4 transition-all duration-200 cursor-pointer
+              w-full text-left rounded-2xl border p-4 transition-all duration-200 cursor-pointer shadow-lg
               ${passed
-                ? `${topic.bgColor} ${topic.borderColor} hover:brightness-125`
-                : "bg-white/5 border-white/10 hover:bg-white/10"
+                ? `${topic.bgColor} ${topic.borderColor} hover:brightness-125 shadow-black/20`
+                : missNeutral
+                  ? "bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/10 shadow-black/20"
+                  : "bg-white/5 border-white/10 hover:bg-white/8 shadow-black/20"
               }
-              ${isActive ? "ring-2 ring-white/40 scale-[1.02]" : ""}
+              ${isActive ? "ring-2 ring-white/30 scale-[1.02]" : ""}
             `}
           >
             {/* Pass/Fail badge */}
@@ -34,24 +38,34 @@ export default function ChecklistCards({ results, activeTopicId, onTopicClick }:
                 className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
                   passed
                     ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
-                    : "bg-red-500/20 text-red-400 border border-red-500/40"
+                    : missNeutral
+                      ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                      : "bg-red-500/20 text-red-400 border border-red-500/40"
                 }`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${passed ? "bg-emerald-400" : "bg-red-400"}`} />
-                {passed ? "PASS" : "FAIL"}
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    passed ? "bg-emerald-400" : missNeutral ? "bg-amber-400" : "bg-red-400"
+                  }`}
+                />
+                {passed ? "PASS" : missLabel}
               </span>
 
               <span className="text-white/30 text-xs">
-                {matches.length} mention{matches.length !== 1 ? "s" : ""}
+                {matches.length} match{matches.length !== 1 ? "es" : ""}
               </span>
             </div>
 
             {/* Topic name */}
-            <p className={`font-semibold text-sm mb-1 ${passed ? topic.color : "text-white/50"}`}>
+            <p
+              className={`font-semibold text-sm mb-1 ${
+                passed ? topic.color : missNeutral ? "text-amber-400/60" : "text-white/50"
+              }`}
+            >
               {topic.label}
             </p>
 
-            {/* Keywords found */}
+            {/* Keywords / patterns found */}
             {passed && matches.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {matches.slice(0, 4).map((kw) => (
@@ -71,12 +85,13 @@ export default function ChecklistCards({ results, activeTopicId, onTopicClick }:
             )}
 
             {!passed && (
-              <p className="text-white/30 text-xs mt-1">Not detected in transcript</p>
+              <p className={`text-xs mt-1 ${missNeutral ? "text-amber-400/40" : "text-white/30"}`}>
+                {missNeutral ? "No credit card taken on this call" : "Not detected in transcript"}
+              </p>
             )}
 
-            {/* Click hint */}
-            <p className="text-white/20 text-xs mt-3">
-              {passed ? "Click to highlight in transcript" : "Topic not covered"}
+            <p className={`text-xs mt-3 ${passed ? "text-white/20" : "text-white/15"}`}>
+              {passed ? "Click to highlight in transcript" : missNeutral ? "" : "Topic not covered"}
             </p>
           </button>
         );
