@@ -38,6 +38,15 @@ export function clearHistory(): void {
   localStorage.removeItem(KEY);
 }
 
+export function updateCallNotes(id: string, notes: string): void {
+  const history = loadHistory();
+  const idx = history.findIndex((r) => r.id === id);
+  if (idx !== -1) {
+    history[idx] = { ...history[idx], notes };
+    localStorage.setItem(KEY, JSON.stringify(history));
+  }
+}
+
 export function makeId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
