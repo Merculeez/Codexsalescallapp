@@ -3,7 +3,7 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
 
 interface Props {
-  onTranscript: (transcript: string) => void;
+  onTranscript: (transcript: string, file?: File) => void;
   onAnalyzing: (v: boolean) => void;
 }
 
@@ -30,7 +30,7 @@ export default function UploadForm({ onTranscript, onAnalyzing }: Props) {
       const res = await fetch("/api/transcribe", { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Transcription failed");
-      onTranscript(data.transcript);
+      onTranscript(data.transcript, file);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {

@@ -57,14 +57,19 @@ export const TOPICS: Topic[] = [
   },
 ];
 
-export function analyzeTranscript(transcript: string): TopicResult[] {
-  const lower = transcript.toLowerCase();
-
+export function analyzeTranscript(
+  transcript: string,
+  customKeywords: Record<string, string[]> = {}
+): TopicResult[] {
   return TOPICS.map((topic) => {
+    const allKeywords = [
+      ...topic.keywords,
+      ...(customKeywords[topic.id] ?? []),
+    ];
     const matches: string[] = [];
     const positions: Array<{ start: number; end: number; word: string }> = [];
 
-    for (const keyword of topic.keywords) {
+    for (const keyword of allKeywords) {
       const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
       let match;
       while ((match = regex.exec(transcript)) !== null) {
@@ -73,7 +78,6 @@ export function analyzeTranscript(transcript: string): TopicResult[] {
       }
     }
 
-    // deduplicate overlapping positions
     const deduped = positions.filter(
       (p, i, arr) => !arr.slice(0, i).some((q) => q.start === p.start)
     );
