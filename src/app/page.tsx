@@ -10,13 +10,34 @@ import HistorySidebar from "@/components/HistorySidebar";
 import CallNotes from "@/components/CallNotes";
 import CallSummary from "@/components/CallSummary";
 import AudioPlayer from "@/components/AudioPlayer";
-import { analyzeTranscript, TopicResult, TOPICS, DEFAULT_RATES } from "@/lib/topics";
+import PdfModal from "@/components/PdfModal";
+import DisputeModal from "@/components/DisputeModal";
+import {
+  analyzeTranscript,
+  TopicResult,
+  TOPICS,
+  DEFAULT_RATES,
+  detectCallType,
+  detectMoveSize,
+  CallType,
+  MoveSize,
+  CALL_TYPE_LABELS,
+  MOVE_SIZE_LABELS,
+} from "@/lib/topics";
 import { saveCall, loadHistory, updateCallNotes, CallRecord, makeId } from "@/lib/history";
 
 const DEFAULT_SETTINGS: Settings = {
   enabledTopicIds: TOPICS.map((t) => t.id),
   customKeywords: {},
   activeRates: [...DEFAULT_RATES],
+};
+
+const CALL_TYPE_COLORS: Record<CallType, string> = {
+  "local-hourly":  "bg-blue-50 text-blue-700 border-blue-200",
+  "long-distance": "bg-purple-50 text-purple-700 border-purple-200",
+  "interstate":    "bg-red-50 text-red-700 border-red-200",
+  "storage":       "bg-amber-50 text-amber-700 border-amber-200",
+  "unknown":       "bg-gray-50 text-gray-500 border-gray-200",
 };
 
 export default function Home() {
@@ -35,6 +56,10 @@ export default function Home() {
   const [currentCallId, setCurrentCallId] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [callType, setCallType] = useState<CallType>("unknown");
+  const [moveSize, setMoveSize] = useState<MoveSize>("unknown");
 
   const [repName, setRepName] = useState("");
   const [callDate, setCallDate] = useState(new Date().toISOString().slice(0, 10));
@@ -51,6 +76,8 @@ export default function Home() {
       setSaved(false);
       setCurrentCallId(null);
       setSummary("");
+      setCallType(detectCallType(text));
+      setMoveSize(detectMoveSize(text));
 
       setSummaryLoading(true);
       try {
@@ -86,12 +113,15 @@ export default function Home() {
     setCurrentCallId(null);
     setSummary("");
     setSummaryLoading(false);
+    setCallType("unknown");
+    setMoveSize("unknown");
   }
 
   function handleSaveCall(): string | null {
     if (!transcript) return null;
-    const passed = results.filter((r) => r.passed).length;
-    const score = Math.round((passed / (results.length || 1)) * 100);
+    const scored = results.filter((r) => !r.topic.warnOnPass && !r.topic.missNeutral);
+    const passed = scored.filter((r) => r.passed).length;
+    const score = Math.round((passed / (scored.length || 1)) * 100);
     const id = makeId();
     const record: CallRecord = {
       id,
@@ -133,6 +163,8 @@ export default function Home() {
     setCurrentCallId(record.id);
     setSummary("");
     setSummaryLoading(false);
+    setCallType(detectCallType(record.transcript));
+    setMoveSize(detectMoveSize(record.transcript));
   }
 
   function handleDeleteHistory(id: string) {
@@ -142,20 +174,27 @@ export default function Home() {
 
   function copySummary() {
     if (!results.length) return;
-    const passed = results.filter((r) => r.passed).length;
-    const score = Math.round((passed / results.length) * 100);
+    const scored = results.filter((r) => !r.topic.warnOnPass && !r.topic.missNeutral);
+    const passed = scored.filter((r) => r.passed).length;
+    const score = Math.round((passed / scored.length) * 100);
+    const redFlags = results.filter((r) => r.topic.warnOnPass && r.passed);
     const lines = [
       `CYA Move Review`,
       repName ? `Salesman: ${repName}` : "",
       callDate ? `Date: ${callDate}` : "",
-      `Score: ${score}% (${passed}/${results.length} topics)`,
+      `Score: ${score}% (${passed}/${scored.length} required topics)`,
+      callType !== "unknown" ? `Move Type: ${CALL_TYPE_LABELS[callType]}` : "",
+      moveSize !== "unknown" ? `Move Size: ${MOVE_SIZE_LABELS[moveSize]}` : "",
       "",
-      ...results.map(
-        (r) =>
-          `${r.passed ? "✓" : "✗"} ${r.topic.label}${
-            r.passed ? ` — ${r.matches.slice(0, 3).join(", ")}` : " — NOT COVERED"
-          }`
-      ),
+      ...results.map((r) => {
+        if (r.topic.warnOnPass) {
+          return `${r.passed ? "⚠" : "✓"} ${r.topic.label}${r.passed ? ` — ${r.matches.slice(0, 2).join(", ")}` : " — Clean"}`;
+        }
+        return `${r.passed ? "✓" : "✗"} ${r.topic.label}${
+          r.passed ? ` — ${r.matches.slice(0, 3).join(", ")}` : " — NOT COVERED"
+        }`;
+      }),
+      redFlags.length > 0 ? `\n⚠ Red Flags: ${redFlags.flatMap((r) => r.matches).join(", ")}` : "",
       notes ? `\nNotes: ${notes}` : "",
     ]
       .filter(Boolean)
@@ -165,10 +204,6 @@ export default function Home() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }
-
-  function printReport() {
-    window.print();
   }
 
   return (
@@ -188,10 +223,33 @@ export default function Home() {
           onClose={() => setShowHistory(false)}
         />
       )}
+      {showPdfModal && transcript && (
+        <PdfModal
+          results={results}
+          transcript={transcript}
+          repName={repName}
+          callDate={callDate}
+          notes={notes}
+          callType={callType}
+          moveSize={moveSize}
+          onClose={() => setShowPdfModal(false)}
+        />
+      )}
+      {showDisputeModal && transcript && (
+        <DisputeModal
+          results={results}
+          transcript={transcript}
+          repName={repName}
+          callDate={callDate}
+          notes={notes}
+          callType={callType}
+          moveSize={moveSize}
+          onClose={() => setShowDisputeModal(false)}
+        />
+      )}
 
       {/* ── Header ── */}
       <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200 px-4 sm:px-6 py-3.5 flex items-center justify-between print:hidden sticky top-0 z-10">
-        {/* Logo + title */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-gray-900 flex items-center justify-center shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,7 +263,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2">
           {transcript && (
             <button
@@ -248,14 +305,13 @@ export default function Home() {
         {!transcript ? (
           /* ── Upload screen ── */
           <div className="max-w-xl mx-auto space-y-6">
-            {/* Hero */}
             <div className="text-center space-y-2 pt-2">
               <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
                 Call Compliance Review
               </h2>
               <p className="text-gray-500 text-sm leading-relaxed max-w-sm mx-auto">
                 Upload a recording or paste a transcript to verify rate disclosure,
-                coverage, deposit collection, and flat rate pricing.
+                minimum hours, crew size, coverage, and more.
               </p>
             </div>
 
@@ -266,17 +322,15 @@ export default function Home() {
                   key={topic.id}
                   className={`flex items-center gap-1.5 text-xs ${topic.color} ${topic.bgColor} border ${topic.borderColor} rounded-full px-3 py-1.5`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full bg-current`} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
                   {topic.label}
                 </div>
               ))}
             </div>
 
-            {/* Salesman + call date — always visible */}
+            {/* Call Info */}
             <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-3 shadow-sm">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
-                Call Info
-              </p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Call Info</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Salesman</label>
@@ -315,28 +369,32 @@ export default function Home() {
         ) : (
           /* ── Results screen ── */
           <div className="space-y-5 animate-fade-in-up">
-            {/* Rep badge */}
-            {(repName || callDate) && (
-              <div className="flex items-center gap-2 flex-wrap">
-                {repName && (
-                  <span className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
-                    Salesman:{" "}
-                    <span className="text-gray-900 font-semibold">{repName}</span>
-                  </span>
-                )}
-                {callDate && (
-                  <span className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
-                    Date:{" "}
-                    <span className="text-gray-900 font-semibold">{callDate}</span>
-                  </span>
-                )}
-                {saved && (
-                  <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
-                    ✓ Saved
-                  </span>
-                )}
-              </div>
-            )}
+            {/* Rep badge + call context */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {repName && (
+                <span className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
+                  Salesman: <span className="text-gray-900 font-semibold">{repName}</span>
+                </span>
+              )}
+              {callDate && (
+                <span className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
+                  Date: <span className="text-gray-900 font-semibold">{callDate}</span>
+                </span>
+              )}
+              <span className={`text-xs font-semibold rounded-lg px-3 py-1.5 border ${CALL_TYPE_COLORS[callType]}`}>
+                {CALL_TYPE_LABELS[callType]}
+              </span>
+              {moveSize !== "unknown" && (
+                <span className="text-xs font-semibold rounded-lg px-3 py-1.5 border bg-gray-50 text-gray-600 border-gray-200">
+                  {MOVE_SIZE_LABELS[moveSize]}
+                </span>
+              )}
+              {saved && (
+                <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                  ✓ Saved
+                </span>
+              )}
+            </div>
 
             {/* Score banner */}
             <ScoreBanner results={results} />
@@ -369,14 +427,25 @@ export default function Home() {
               </button>
 
               <button
-                onClick={printReport}
+                onClick={() => setShowPdfModal(true)}
                 className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 rounded-lg px-3 py-1.5 transition bg-white shadow-sm"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
-                Print / PDF
+                Generate PDF
+              </button>
+
+              <button
+                onClick={() => setShowDisputeModal(true)}
+                className="flex items-center gap-1.5 text-xs text-white bg-gray-900 hover:bg-gray-700 border border-gray-900 rounded-lg px-3 py-1.5 transition shadow-sm font-semibold"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Dispute Response
               </button>
 
               <button

@@ -10,10 +10,14 @@ interface Props {
 }
 
 const TOPIC_HIGHLIGHT: Record<string, { bg: string; text: string; border: string }> = {
-  price:     { bg: "bg-blue-100",   text: "text-blue-900",   border: "border-blue-400" },
-  flatrate:  { bg: "bg-orange-100", text: "text-orange-900", border: "border-orange-400" },
-  insurance: { bg: "bg-teal-100",   text: "text-teal-900",   border: "border-teal-400" },
-  payment:   { bg: "bg-green-100",  text: "text-green-900",  border: "border-green-400" },
+  price:         { bg: "bg-blue-100",   text: "text-blue-900",   border: "border-blue-400" },
+  minimumhours:  { bg: "bg-violet-100", text: "text-violet-900", border: "border-violet-400" },
+  crewsize:      { bg: "bg-indigo-100", text: "text-indigo-900", border: "border-indigo-400" },
+  flatrate:      { bg: "bg-orange-100", text: "text-orange-900", border: "border-orange-400" },
+  insurance:     { bg: "bg-teal-100",   text: "text-teal-900",   border: "border-teal-400" },
+  payment:       { bg: "bg-green-100",  text: "text-green-900",  border: "border-green-400" },
+  multiplestops: { bg: "bg-cyan-100",   text: "text-cyan-900",   border: "border-cyan-400" },
+  redflag:       { bg: "bg-red-100",    text: "text-red-900",    border: "border-red-400" },
 };
 
 export default function TranscriptViewer({ transcript, results, activeTopicId }: Props) {
