@@ -47,5 +47,4 @@ mark {
 /* Print styles */
 @media print {
   body { background: white; }
-  header, .print\\:hidden { display: none !important; }
 }
