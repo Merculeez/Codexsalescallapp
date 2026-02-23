@@ -44,7 +44,6 @@ export default function UploadForm({ onTranscript, onAnalyzing }: Props) {
     setError(null);
     setLoading(true);
     onAnalyzing(true);
-    // Small delay for UX
     await new Promise((r) => setTimeout(r, 400));
     onTranscript(pastedText.trim());
     setLoading(false);
@@ -64,19 +63,19 @@ export default function UploadForm({ onTranscript, onAnalyzing }: Props) {
   }
 
   return (
-    <div className="rounded-2xl bg-white/5 border border-white/10 p-6">
-      <h2 className="text-lg font-semibold text-white mb-4">Load Call Transcript</h2>
+    <div className="rounded-2xl bg-white border border-gray-200 p-6 shadow-sm">
+      <h2 className="text-base font-semibold text-gray-900 mb-4">Load Call Transcript</h2>
 
       {/* Mode toggle */}
-      <div className="flex rounded-xl overflow-hidden border border-white/10 mb-5 w-fit">
+      <div className="flex rounded-xl overflow-hidden border border-gray-200 mb-5 w-fit">
         {(["upload", "paste"] as Mode[]).map((m) => (
           <button
             key={m}
             onClick={() => setMode(m)}
             className={`px-5 py-2 text-sm font-medium transition-colors ${
               mode === m
-                ? "bg-white text-black"
-                : "bg-transparent text-white/50 hover:text-white"
+                ? "bg-gray-900 text-white"
+                : "bg-white text-gray-500 hover:text-gray-900"
             }`}
           >
             {m === "upload" ? "Upload Audio" : "Paste Transcript"}
@@ -92,7 +91,7 @@ export default function UploadForm({ onTranscript, onAnalyzing }: Props) {
           onDrop={onDrop}
           className={`
             relative flex flex-col items-center justify-center gap-3 h-40 rounded-xl border-2 border-dashed cursor-pointer transition-all
-            ${dragging ? "border-white/60 bg-white/10" : "border-white/20 hover:border-white/40 hover:bg-white/5"}
+            ${dragging ? "border-blue-400 bg-blue-50" : "border-gray-200 hover:border-gray-400 hover:bg-gray-50"}
           `}
         >
           <input
@@ -103,21 +102,21 @@ export default function UploadForm({ onTranscript, onAnalyzing }: Props) {
             onChange={onFileChange}
           />
 
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white/10">
-            <svg className="w-6 h-6 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-100">
+            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
             </svg>
           </div>
 
           {loading ? (
-            <p className="text-white/60 text-sm">Transcribing with Whisper AI...</p>
+            <p className="text-gray-500 text-sm">Transcribing with Whisper AI...</p>
           ) : fileName ? (
-            <p className="text-emerald-400 text-sm font-medium">{fileName} — ready</p>
+            <p className="text-green-600 text-sm font-medium">{fileName} — ready</p>
           ) : (
             <>
-              <p className="text-white/60 text-sm">Drop audio file here or click to browse</p>
-              <p className="text-white/30 text-xs">MP3, WAV, M4A, MP4, WebM supported</p>
+              <p className="text-gray-500 text-sm">Drop audio file here or click to browse</p>
+              <p className="text-gray-400 text-xs">MP3, WAV, M4A, MP4, WebM supported</p>
             </>
           )}
         </div>
@@ -127,12 +126,12 @@ export default function UploadForm({ onTranscript, onAnalyzing }: Props) {
             value={pastedText}
             onChange={(e) => setPastedText(e.target.value)}
             placeholder="Paste the full call transcript here..."
-            className="w-full h-48 rounded-xl bg-white/5 border border-white/10 text-white/80 text-sm p-4 resize-none placeholder-white/20 focus:outline-none focus:border-white/30 font-mono leading-relaxed"
+            className="w-full h-48 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 text-sm p-4 resize-none placeholder-gray-300 focus:outline-none focus:border-blue-400 font-mono leading-relaxed transition"
           />
           <button
             onClick={handlePaste}
             disabled={loading || !pastedText.trim()}
-            className="w-full py-3 rounded-xl bg-white text-black font-semibold text-sm hover:bg-white/90 transition disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold text-sm hover:bg-gray-700 transition disabled:opacity-30 disabled:cursor-not-allowed"
           >
             {loading ? "Analyzing..." : "Analyze Transcript"}
           </button>
@@ -140,12 +139,12 @@ export default function UploadForm({ onTranscript, onAnalyzing }: Props) {
       )}
 
       {error && (
-        <div className="mt-3 flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2">
-          <svg className="w-4 h-4 text-red-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="mt-3 flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+          <svg className="w-4 h-4 text-red-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-red-400 text-xs">{error}</p>
+          <p className="text-red-600 text-xs">{error}</p>
         </div>
       )}
     </div>

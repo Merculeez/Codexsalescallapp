@@ -10,14 +10,13 @@ import HistorySidebar from "@/components/HistorySidebar";
 import CallNotes from "@/components/CallNotes";
 import CallSummary from "@/components/CallSummary";
 import AudioPlayer from "@/components/AudioPlayer";
-import { analyzeTranscript, TopicResult, TOPICS } from "@/lib/topics";
+import { analyzeTranscript, TopicResult, TOPICS, DEFAULT_RATES } from "@/lib/topics";
 import { saveCall, loadHistory, updateCallNotes, CallRecord, makeId } from "@/lib/history";
 
 const DEFAULT_SETTINGS: Settings = {
   enabledTopicIds: TOPICS.map((t) => t.id),
-  failBehavior: "show-missed",
-  trackRep: false,
   customKeywords: {},
+  activeRates: [...DEFAULT_RATES],
 };
 
 export default function Home() {
@@ -44,7 +43,7 @@ export default function Home() {
     async (text: string, file?: File) => {
       setTranscript(text);
       if (file) setAudioFile(file);
-      const allResults = analyzeTranscript(text, settings.customKeywords);
+      const allResults = analyzeTranscript(text, settings.customKeywords, settings.activeRates);
       const filtered = allResults.filter((r) => settings.enabledTopicIds.includes(r.topic.id));
       setResults(filtered);
       setActiveTopicId(null);
@@ -53,7 +52,6 @@ export default function Home() {
       setCurrentCallId(null);
       setSummary("");
 
-      // Generate AI summary in background
       setSummaryLoading(true);
       try {
         const res = await fetch("/api/summary", {
@@ -116,11 +114,9 @@ export default function Home() {
   function handleSaveNotes() {
     if (!transcript) return;
     if (currentCallId) {
-      // Call already in history — just update notes
       updateCallNotes(currentCallId, notes);
       setHistory(loadHistory());
     } else {
-      // Not saved yet — save full call (which includes current notes)
       handleSaveCall();
     }
   }
@@ -149,8 +145,8 @@ export default function Home() {
     const passed = results.filter((r) => r.passed).length;
     const score = Math.round((passed / results.length) * 100);
     const lines = [
-      `CodeX Sales Call Review`,
-      repName ? `Rep: ${repName}` : "",
+      `CYA Move Review`,
+      repName ? `Salesman: ${repName}` : "",
       callDate ? `Date: ${callDate}` : "",
       `Score: ${score}% (${passed}/${results.length} topics)`,
       "",
@@ -175,12 +171,8 @@ export default function Home() {
     window.print();
   }
 
-  const failedTopics = results.filter((r) => !r.passed);
-  const showFlagBanner =
-    settings.failBehavior === "flag-review" && failedTopics.length > 0 && !!transcript;
-
   return (
-    <main className="min-h-screen bg-[#08080f] text-white">
+    <main className="min-h-screen bg-[#F5F5F7] text-gray-900">
       {showSettings && (
         <SettingsPanel
           settings={settings}
@@ -197,43 +189,35 @@ export default function Home() {
         />
       )}
 
-      {/* ── Gradient Header ── */}
-      <header className="relative border-b border-white/8 px-4 sm:px-6 py-4 flex items-center justify-between print:hidden overflow-hidden">
-        {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-950/70 via-slate-900/80 to-indigo-950/70 pointer-events-none" />
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent pointer-events-none" />
-
+      {/* ── Header ── */}
+      <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200 px-4 sm:px-6 py-3.5 flex items-center justify-between print:hidden sticky top-0 z-10">
         {/* Logo + title */}
-        <div className="relative flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/25">
-            <svg className="w-4.5 h-4.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-              />
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-gray-900 flex items-center justify-center shrink-0">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
             </svg>
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white tracking-tight">CodeX Sales Analyzer</h1>
-            <p className="text-xs text-white/40">Compliance &amp; quality review</p>
+            <h1 className="text-sm font-bold text-gray-900 tracking-tight">CYA Move Review</h1>
+            <p className="text-xs text-gray-400">Call compliance &amp; dispute review</p>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="relative flex items-center gap-2">
+        <div className="flex items-center gap-2">
           {transcript && (
             <button
               onClick={handleReset}
-              className="text-xs text-white/40 hover:text-white/80 border border-white/10 hover:border-violet-500/40 rounded-lg px-3 py-1.5 transition-all duration-150"
+              className="text-xs text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 rounded-lg px-3 py-1.5 transition-all duration-150 bg-white"
             >
               New Call
             </button>
           )}
           <button
             onClick={() => setShowHistory(true)}
-            className="relative flex items-center gap-1.5 text-xs text-white/40 hover:text-white/80 border border-white/10 hover:border-violet-500/40 rounded-lg px-3 py-1.5 transition-all duration-150"
+            className="relative flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 rounded-lg px-3 py-1.5 transition-all duration-150 bg-white"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -241,14 +225,14 @@ export default function Home() {
             </svg>
             History
             {history.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-500 text-white text-[10px] flex items-center justify-center font-bold shadow shadow-violet-500/40">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-900 text-white text-[10px] flex items-center justify-center font-bold">
                 {history.length > 9 ? "9+" : history.length}
               </span>
             )}
           </button>
           <button
             onClick={() => setShowSettings(true)}
-            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/80 border border-white/10 hover:border-violet-500/40 rounded-lg px-3 py-1.5 transition-all duration-150"
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 rounded-lg px-3 py-1.5 transition-all duration-150 bg-white"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -260,84 +244,61 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Flag banner */}
-      {showFlagBanner && (
-        <div className="flex items-center gap-3 px-6 py-3 bg-amber-500/10 border-b border-amber-500/20 print:hidden">
-          <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
-          </svg>
-          <p className="text-amber-400 text-xs font-medium">
-            Flagged for manager review —{" "}
-            {failedTopics.map((r) => r.topic.label).join(", ")} not covered.
-          </p>
-        </div>
-      )}
-
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         {!transcript ? (
           /* ── Upload screen ── */
-          <div className="max-w-xl mx-auto space-y-8">
+          <div className="max-w-xl mx-auto space-y-6">
             {/* Hero */}
-            <div className="text-center space-y-3 pt-4">
-              <div className="inline-flex items-center gap-2 text-xs text-violet-400/70 bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1 mb-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-                AI-Powered Call Analysis
-              </div>
-              <h2 className="text-3xl font-bold text-white leading-tight">
-                Sales Call{" "}
-                <span className="bg-gradient-to-r from-violet-400 to-blue-400 bg-clip-text text-transparent">
-                  Quality Review
-                </span>
+            <div className="text-center space-y-2 pt-2">
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+                Call Compliance Review
               </h2>
-              <p className="text-white/40 text-sm leading-relaxed max-w-sm mx-auto">
-                Upload a recording or paste a transcript. We&apos;ll analyze rate disclosure,
-                coverage discussion, and deposit collection in seconds.
+              <p className="text-gray-500 text-sm leading-relaxed max-w-sm mx-auto">
+                Upload a recording or paste a transcript to verify rate disclosure,
+                coverage, deposit collection, and flat rate pricing.
               </p>
             </div>
 
             {/* Topic chips */}
-            <div className="flex justify-center gap-3 flex-wrap">
+            <div className="flex justify-center gap-2 flex-wrap">
               {TOPICS.filter((t) => settings.enabledTopicIds.includes(t.id)).map((topic) => (
                 <div
                   key={topic.id}
-                  className={`flex items-center gap-2 text-xs ${topic.color} bg-white/5 border border-white/10 rounded-full px-3 py-1.5`}
+                  className={`flex items-center gap-1.5 text-xs ${topic.color} ${topic.bgColor} border ${topic.borderColor} rounded-full px-3 py-1.5`}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${topic.bgColor} border ${topic.borderColor}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full bg-current`} />
                   {topic.label}
                 </div>
               ))}
             </div>
 
-            {/* Rep tracking fields */}
-            {settings.trackRep && (
-              <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3 shadow-lg shadow-black/20">
-                <p className="text-xs font-semibold text-white/40 uppercase tracking-widest">
-                  Call Info
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-white/40 mb-1 block">Rep Name</label>
-                    <input
-                      type="text"
-                      value={repName}
-                      onChange={(e) => setRepName(e.target.value)}
-                      placeholder="e.g. John Smith"
-                      className="w-full rounded-lg bg-white/5 border border-white/10 text-white text-sm px-3 py-2 placeholder-white/20 focus:outline-none focus:border-violet-500/50 transition"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-white/40 mb-1 block">Call Date</label>
-                    <input
-                      type="date"
-                      value={callDate}
-                      onChange={(e) => setCallDate(e.target.value)}
-                      className="w-full rounded-lg bg-white/5 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-violet-500/50 transition"
-                    />
-                  </div>
+            {/* Salesman + call date — always visible */}
+            <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-3 shadow-sm">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                Call Info
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Salesman</label>
+                  <input
+                    type="text"
+                    value={repName}
+                    onChange={(e) => setRepName(e.target.value)}
+                    placeholder="e.g. John Smith"
+                    className="w-full rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm px-3 py-2.5 placeholder-gray-300 focus:outline-none focus:border-blue-400 transition"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Call Date</label>
+                  <input
+                    type="date"
+                    value={callDate}
+                    onChange={(e) => setCallDate(e.target.value)}
+                    className="w-full rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm px-3 py-2.5 focus:outline-none focus:border-blue-400 transition"
+                  />
                 </div>
               </div>
-            )}
+            </div>
 
             <UploadForm
               onTranscript={(text, file) => handleTranscript(text, file)}
@@ -346,13 +307,8 @@ export default function Home() {
 
             {analyzing && (
               <div className="flex flex-col items-center justify-center gap-3 py-8">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-full border-2 border-violet-500/20 border-t-violet-500 animate-spin" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-4 h-4 rounded-full bg-violet-500/20 animate-pulse" />
-                  </div>
-                </div>
-                <p className="text-white/50 text-sm">Transcribing and analyzing...</p>
+                <div className="w-8 h-8 rounded-full border-2 border-gray-200 border-t-gray-900 animate-spin" />
+                <p className="text-gray-400 text-sm">Transcribing and analyzing...</p>
               </div>
             )}
           </div>
@@ -361,22 +317,22 @@ export default function Home() {
           <div className="space-y-5 animate-fade-in-up">
             {/* Rep badge */}
             {(repName || callDate) && (
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 {repName && (
-                  <span className="text-xs text-white/50 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
-                    Rep:{" "}
-                    <span className="text-white font-semibold">{repName}</span>
+                  <span className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
+                    Salesman:{" "}
+                    <span className="text-gray-900 font-semibold">{repName}</span>
                   </span>
                 )}
                 {callDate && (
-                  <span className="text-xs text-white/50 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
+                  <span className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
                     Date:{" "}
-                    <span className="text-white font-semibold">{callDate}</span>
+                    <span className="text-gray-900 font-semibold">{callDate}</span>
                   </span>
                 )}
                 {saved && (
-                  <span className="text-xs text-emerald-400/70 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5">
-                    ✓ Saved to history
+                  <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+                    ✓ Saved
                   </span>
                 )}
               </div>
@@ -385,21 +341,21 @@ export default function Home() {
             {/* Score banner */}
             <ScoreBanner results={results} />
 
-            {/* AI Call Summary + Key Metrics */}
+            {/* AI Call Summary */}
             <CallSummary summary={summary} loading={summaryLoading} results={results} />
 
             {/* Action bar */}
             <div className="flex items-center gap-2 flex-wrap print:hidden">
               <button
                 onClick={copySummary}
-                className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 rounded-lg px-3 py-1.5 transition"
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 rounded-lg px-3 py-1.5 transition bg-white shadow-sm"
               >
                 {copied ? (
                   <>
-                    <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <span className="text-emerald-400">Copied!</span>
+                    <span className="text-green-600">Copied!</span>
                   </>
                 ) : (
                   <>
@@ -414,7 +370,7 @@ export default function Home() {
 
               <button
                 onClick={printReport}
-                className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white border border-white/10 hover:border-white/25 rounded-lg px-3 py-1.5 transition"
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 rounded-lg px-3 py-1.5 transition bg-white shadow-sm"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -426,16 +382,16 @@ export default function Home() {
               <button
                 onClick={handleSaveCall}
                 disabled={saved}
-                className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 transition ${
+                className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 transition shadow-sm ${
                   saved
-                    ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10 cursor-default"
-                    : "text-white/50 hover:text-white border-white/10 hover:border-white/25"
+                    ? "text-green-700 border-green-200 bg-green-50 cursor-default"
+                    : "text-gray-500 hover:text-gray-900 border-gray-200 hover:border-gray-400 bg-white"
                 }`}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                {saved ? "Saved to History" : "Save to History"}
+                {saved ? "Saved" : "Save to History"}
               </button>
             </div>
 
@@ -444,8 +400,8 @@ export default function Home() {
 
             {/* Checklist cards */}
             <div>
-              <p className="text-xs text-white/25 uppercase tracking-widest mb-3 font-semibold print:hidden">
-                Compliance Checklist — click any card to highlight
+              <p className="text-xs text-gray-400 uppercase tracking-widest mb-3 font-semibold print:hidden">
+                Compliance Checklist — click any card to highlight in transcript
               </p>
               <ChecklistCards
                 results={results}
@@ -461,10 +417,10 @@ export default function Home() {
               activeTopicId={activeTopicId}
             />
 
-            {/* Coaching notes with save button */}
+            {/* Manager notes */}
             <CallNotes notes={notes} onChange={setNotes} onSave={handleSaveNotes} />
 
-            <p className="text-center text-white/15 text-xs pb-4 print:hidden">
+            <p className="text-center text-gray-300 text-xs pb-4 print:hidden">
               Click any checklist card to jump to matching keywords in the transcript
             </p>
           </div>
