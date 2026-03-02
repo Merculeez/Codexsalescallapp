@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MoveCall Insights</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo">MC</div>
+          <div>
+            <p class="brand-title">MoveCall Insights</p>
+            <p class="brand-subtitle">QA for moving sales calls</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Upload &amp; Process</h2>
+          <p class="muted">
+            Drop new call recordings to generate transcripts and highlight key sales
+            topics automatically.
+          </p>
+          <label class="upload">
+            <input type="file" accept="audio/*" />
+            <span>Upload a call recording</span>
+          </label>
+          <div class="status-card">
+            <p class="status-title">Latest transcription</p>
+            <p class="status-meta">00:12 • Processing complete</p>
+            <div class="status-progress">
+              <span style="width: 82%"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Preview locally</h2>
+          <p class="muted">
+            Start a quick local server to preview the interface in your browser.
+          </p>
+          <div class="code-block">
+            <code>python -m http.server 8000</code>
+          </div>
+          <a class="link-button" href="http://localhost:8000/index.html" target="_blank" rel="noreferrer">
+            Open preview
+          </a>
+        </div>
+
+        <div class="panel">
+          <h2>Keyword Libraries</h2>
+          <p class="muted">Add phrases you want flagged in every call.</p>
+          <div class="keyword-group">
+            <div class="chip-group" id="coverage-chips"></div>
+            <div class="chip-group" id="pricing-chips"></div>
+          </div>
+          <form id="keyword-form">
+            <label>
+              Keyword or phrase
+              <input id="keyword-input" type="text" placeholder="e.g., full value protection" />
+            </label>
+            <label>
+              Category
+              <select id="keyword-category">
+                <option value="coverage">Coverage</option>
+                <option value="pricing">Pricing</option>
+              </select>
+            </label>
+            <button type="submit">Add keyword</button>
+          </form>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1>Call Review</h1>
+            <p class="muted">Auto-highlighted transcript sections for pricing and coverage.</p>
+          </div>
+          <div class="controls">
+            <button class="ghost">Export summary</button>
+            <button>Share insights</button>
+          </div>
+        </header>
+
+        <section class="summary-grid">
+          <div class="summary-card">
+            <p class="summary-label">Coverage mentions</p>
+            <p class="summary-value" id="coverage-count">0</p>
+            <p class="summary-meta">Mentions of coverage options</p>
+          </div>
+          <div class="summary-card">
+            <p class="summary-label">Pricing mentions</p>
+            <p class="summary-value" id="pricing-count">0</p>
+            <p class="summary-meta">Mentions of pricing details</p>
+          </div>
+          <div class="summary-card">
+            <p class="summary-label">Call sentiment</p>
+            <p class="summary-value">Positive</p>
+            <p class="summary-meta">Based on tone scoring</p>
+          </div>
+        </section>
+
+        <section class="transcript">
+          <div class="transcript-header">
+            <div>
+              <h2>Transcript</h2>
+              <p class="muted">Select any highlight to jump to the timestamp.</p>
+            </div>
+            <div class="legend">
+              <span class="legend-item coverage">Coverage</span>
+              <span class="legend-item pricing">Pricing</span>
+            </div>
+          </div>
+
+          <div class="transcript-body" id="transcript-body"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
