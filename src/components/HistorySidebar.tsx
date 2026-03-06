@@ -102,7 +102,7 @@ export default function HistorySidebar({ history, onSelect, onDelete, onClose }:
 
                     {record.notes && (
                       <p className="text-xs text-white/30 mt-2 italic truncate">
-                        "{record.notes}"
+                        &quot;{record.notes}&quot;
                       </p>
                     )}
                   </button>

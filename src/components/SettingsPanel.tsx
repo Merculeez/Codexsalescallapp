@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { TOPICS, Topic } from "@/lib/topics";
+import { DEFAULT_RATES, TOPICS, Topic } from "@/lib/topics";
 
 export interface Settings {
   enabledTopicIds: string[];
   failBehavior: "show-missed" | "flag-review";
   trackRep: boolean;
-  customKeywords: Record<string, string[]>; // topicId → extra keywords
+  customKeywords: Record<string, string[]>;
+  activeRates: number[];
 }
 
 interface Props {
@@ -23,24 +24,25 @@ export default function SettingsPanel({ settings, onSave, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("topics");
   const [newKw, setNewKw] = useState<Record<string, string>>({});
 
-  function toggleTopic(id: string) {
+  const toggleTopic = (id: string) => {
     setLocal((prev) => ({
       ...prev,
       enabledTopicIds: prev.enabledTopicIds.includes(id)
         ? prev.enabledTopicIds.filter((t) => t !== id)
         : [...prev.enabledTopicIds, id],
     }));
-  }
+  };
 
-  function setFailBehavior(v: Settings["failBehavior"]) {
-    setLocal((prev) => ({ ...prev, failBehavior: v }));
-  }
+  const toggleRate = (rate: number) => {
+    setLocal((prev) => ({
+      ...prev,
+      activeRates: prev.activeRates.includes(rate)
+        ? prev.activeRates.filter((r) => r !== rate)
+        : [...prev.activeRates, rate].sort((a, b) => a - b),
+    }));
+  };
 
-  function toggleTrackRep() {
-    setLocal((prev) => ({ ...prev, trackRep: !prev.trackRep }));
-  }
-
-  function addKeyword(topicId: string) {
+  const addKeyword = (topicId: string) => {
     const kw = (newKw[topicId] ?? "").trim().toLowerCase();
     if (!kw) return;
     setLocal((prev) => ({
@@ -51,214 +53,148 @@ export default function SettingsPanel({ settings, onSave, onClose }: Props) {
       },
     }));
     setNewKw((prev) => ({ ...prev, [topicId]: "" }));
-  }
-
-  function removeKeyword(topicId: string, kw: string) {
-    setLocal((prev) => ({
-      ...prev,
-      customKeywords: {
-        ...prev.customKeywords,
-        [topicId]: (prev.customKeywords[topicId] ?? []).filter((k) => k !== kw),
-      },
-    }));
-  }
-
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "topics", label: "Topics" },
-    { id: "keywords", label: "Keywords" },
-    { id: "behavior", label: "Behavior" },
-  ];
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
       <div className="relative w-full max-w-md rounded-2xl bg-[#111118] border border-white/10 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <h2 className="text-sm font-semibold text-white">Settings</h2>
-          </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <h2 className="text-sm font-semibold text-white">Settings</h2>
+          <button onClick={onClose} className="text-white/30 hover:text-white">✕</button>
         </div>
 
-        {/* Tab bar */}
         <div className="flex border-b border-white/10 shrink-0">
-          {tabs.map((t) => (
+          {(["topics", "keywords", "behavior"] as Tab[]).map((id) => (
             <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${
-                tab === t.id
-                  ? "text-white border-b-2 border-white"
-                  : "text-white/30 hover:text-white/60"
-              }`}
+              key={id}
+              onClick={() => setTab(id)}
+              className={`flex-1 py-2.5 text-xs font-semibold ${tab === id ? "text-white border-b-2 border-white" : "text-white/30"}`}
             >
-              {t.label}
+              {id[0].toUpperCase() + id.slice(1)}
             </button>
           ))}
         </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4"
-          style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.1) transparent" }}>
-
-          {/* ── Tab: Topics ── */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {tab === "topics" && (
             <>
-              <p className="text-xs text-white/30">Select which topics a rep must cover for a call to pass.</p>
+              <p className="text-xs text-white/30">Enable required topics and choose which hourly rates count as valid disclosures.</p>
               <div className="space-y-2">
-                {TOPICS.map((topic: Topic) => {
-                  const enabled = local.enabledTopicIds.includes(topic.id);
-                  return (
-                    <label
-                      key={topic.id}
-                      className={`
-                        flex items-center gap-4 w-full rounded-xl border px-4 py-3.5 cursor-pointer
-                        transition-all duration-150 select-none
-                        ${enabled ? `${topic.bgColor} ${topic.borderColor}` : "bg-white/5 border-white/10 hover:bg-white/8"}
-                      `}
-                    >
-                      <input type="checkbox" checked={enabled} onChange={() => toggleTopic(topic.id)} className="sr-only" />
-                      <div className={`flex items-center justify-center w-5 h-5 rounded-md border-2 shrink-0 transition-all ${enabled ? topic.borderColor : "border-white/20"}`}>
-                        {enabled && (
-                          <svg className={`w-3 h-3 ${topic.color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${enabled ? topic.color : "text-white/50"}`}>{topic.label}</p>
-                        <p className="text-xs text-white/30 mt-0.5 truncate">{topic.keywords.slice(0, 5).join(", ")}…</p>
-                      </div>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${enabled ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-white/20"}`}>
-                        {enabled ? "Required" : "Off"}
-                      </span>
+                {TOPICS.map((topic: Topic) => (
+                  <label key={topic.id} className="flex items-center gap-3 text-sm text-white/80 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+                    <input type="checkbox" checked={local.enabledTopicIds.includes(topic.id)} onChange={() => toggleTopic(topic.id)} />
+                    {topic.label}
+                  </label>
+                ))}
+              </div>
+              <div className="pt-3 border-t border-white/10">
+                <p className="text-xs font-semibold text-white/50 mb-2">Active Rate Tiers</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {DEFAULT_RATES.map((rate) => (
+                    <label key={rate} className="text-xs text-white/70 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5">
+                      <input
+                        className="mr-1"
+                        type="checkbox"
+                        checked={local.activeRates.includes(rate)}
+                        onChange={() => toggleRate(rate)}
+                      />
+                      ${rate}
                     </label>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* ── Tab: Keywords ── */}
-          {tab === "keywords" && (
-            <>
-              <p className="text-xs text-white/30">Add your own trigger words to any topic. These are added on top of the built-in keywords.</p>
-              <div className="space-y-4">
-                {TOPICS.map((topic: Topic) => {
-                  const custom = local.customKeywords[topic.id] ?? [];
-                  return (
-                    <div key={topic.id} className="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
-                      <div className={`px-4 py-3 border-b border-white/10 flex items-center gap-2 ${topic.bgColor}`}>
-                        <span className={`text-xs font-bold uppercase tracking-wide ${topic.color}`}>{topic.label}</span>
-                      </div>
-                      <div className="p-3 space-y-2">
-                        {/* Custom keyword chips */}
-                        {custom.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {custom.map((kw) => (
-                              <span key={kw} className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full ${topic.bgColor} ${topic.color} border ${topic.borderColor}/30`}>
-                                {kw}
-                                <button onClick={() => removeKeyword(topic.id, kw)} className="hover:opacity-70">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {/* Add input */}
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={newKw[topic.id] ?? ""}
-                            onChange={(e) => setNewKw((p) => ({ ...p, [topic.id]: e.target.value }))}
-                            onKeyDown={(e) => e.key === "Enter" && addKeyword(topic.id)}
-                            placeholder="Type a keyword and press Enter"
-                            className="flex-1 rounded-lg bg-white/5 border border-white/10 text-white text-xs px-3 py-2 placeholder-white/20 focus:outline-none focus:border-white/30"
-                          />
-                          <button
-                            onClick={() => addKeyword(topic.id)}
-                            className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition"
-                          >
-                            Add
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* ── Tab: Behavior ── */}
-          {tab === "behavior" && (
-            <>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">When a Call Fails</p>
-                <div className="space-y-2">
-                  {([
-                    { value: "show-missed" as const, label: "Show missed topics", desc: "Highlight which topics were skipped with red fail badges" },
-                    { value: "flag-review" as const, label: "Flag for manager review", desc: "Show an amber review-needed banner at the top of the dashboard" },
-                  ]).map((opt) => {
-                    const selected = local.failBehavior === opt.value;
-                    return (
-                      <label key={opt.value} className={`flex items-center gap-4 w-full rounded-xl border px-4 py-3.5 cursor-pointer transition-all duration-150 select-none ${selected ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/8"}`}>
-                        <input type="radio" name="failBehavior" value={opt.value} checked={selected} onChange={() => setFailBehavior(opt.value)} className="sr-only" />
-                        <div className={`flex items-center justify-center w-5 h-5 rounded-full border-2 shrink-0 transition-all ${selected ? "border-white bg-white" : "border-white/20"}`}>
-                          {selected && <div className="w-2 h-2 rounded-full bg-black" />}
-                        </div>
-                        <div className="flex-1">
-                          <p className={`text-sm font-medium ${selected ? "text-white" : "text-white/50"}`}>{opt.label}</p>
-                          <p className="text-xs text-white/30 mt-0.5">{opt.desc}</p>
-                        </div>
-                      </label>
-                    );
-                  })}
+                  ))}
                 </div>
               </div>
+            </>
+          )}
 
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">Call Tracking</p>
-                <label className={`flex items-center gap-4 w-full rounded-xl border px-4 py-3.5 cursor-pointer transition-all duration-150 select-none ${local.trackRep ? "bg-white/10 border-white/30" : "bg-white/5 border-white/10 hover:bg-white/8"}`}>
-                  <input type="checkbox" checked={local.trackRep} onChange={toggleTrackRep} className="sr-only" />
-                  <div className="relative shrink-0" style={{ width: "40px", height: "22px" }}>
-                    <div className={`absolute inset-0 rounded-full transition-colors duration-200 ${local.trackRep ? "bg-white" : "bg-white/20"}`} />
-                    <div className={`absolute top-0.5 w-4 h-4 rounded-full shadow transition-transform duration-200 ${local.trackRep ? "translate-x-5 bg-black" : "translate-x-0.5 bg-white/60"}`} />
+          {tab === "keywords" && (
+            <div className="space-y-4">
+              {TOPICS.map((topic) => (
+                <div key={topic.id} className="bg-white/5 border border-white/10 rounded-xl p-3">
+                  <p className="text-xs text-white mb-2">{topic.label}</p>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {(local.customKeywords[topic.id] ?? []).map((kw) => (
+                      <button
+                        key={kw}
+                        onClick={() =>
+                          setLocal((prev) => ({
+                            ...prev,
+                            customKeywords: {
+                              ...prev.customKeywords,
+                              [topic.id]: (prev.customKeywords[topic.id] ?? []).filter((k) => k !== kw),
+                            },
+                          }))
+                        }
+                        className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/70"
+                      >
+                        {kw} ✕
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex-1">
-                    <p className={`text-sm font-medium ${local.trackRep ? "text-white" : "text-white/50"}`}>Rep name &amp; call date</p>
-                    <p className="text-xs text-white/30 mt-0.5">Label results by rep and date before each analysis</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={newKw[topic.id] ?? ""}
+                      onChange={(e) => setNewKw((prev) => ({ ...prev, [topic.id]: e.target.value }))}
+                      onKeyDown={(e) => e.key === "Enter" && addKeyword(topic.id)}
+                      placeholder="Add keyword"
+                      className="flex-1 rounded-lg bg-black/20 border border-white/10 px-2 py-1 text-xs"
+                    />
+                    <button onClick={() => addKeyword(topic.id)} className="text-xs px-2 rounded bg-white text-black">
+                      Add
+                    </button>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === "behavior" && (
+            <div className="space-y-4">
+              <label className="block text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={local.trackRep}
+                  onChange={() => setLocal((prev) => ({ ...prev, trackRep: !prev.trackRep }))}
+                  className="mr-2"
+                />
+                Track call metadata (rep/customer/date)
+              </label>
+              <div className="space-y-2 text-sm">
+                <label className="block text-white/70">
+                  <input
+                    type="radio"
+                    name="fail"
+                    checked={local.failBehavior === "show-missed"}
+                    onChange={() => setLocal((prev) => ({ ...prev, failBehavior: "show-missed" }))}
+                    className="mr-2"
+                  />
+                  Show missed topics
+                </label>
+                <label className="block text-white/70">
+                  <input
+                    type="radio"
+                    name="fail"
+                    checked={local.failBehavior === "flag-review"}
+                    onChange={() => setLocal((prev) => ({ ...prev, failBehavior: "flag-review" }))}
+                    className="mr-2"
+                  />
+                  Flag for manager review
                 </label>
               </div>
-            </>
+            </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center gap-3 px-6 py-4 border-t border-white/10 shrink-0">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white hover:border-white/20 text-sm font-medium transition">
-            Cancel
-          </button>
+        <div className="flex gap-2 px-6 py-4 border-t border-white/10">
+          <button onClick={onClose} className="flex-1 py-2 rounded border border-white/10 text-white/70">Cancel</button>
           <button
-            onClick={() => { onSave(local); onClose(); }}
-            disabled={local.enabledTopicIds.length === 0}
-            className="flex-1 py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-white/90 transition disabled:opacity-30 disabled:cursor-not-allowed"
+            onClick={() => {
+              onSave(local);
+              onClose();
+            }}
+            className="flex-1 py-2 rounded bg-white text-black font-semibold"
           >
-            Save Settings
+            Save
           </button>
         </div>
       </div>
