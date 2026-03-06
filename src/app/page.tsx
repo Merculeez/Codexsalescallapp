@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import UploadForm from "@/components/UploadForm";
 import ChecklistCards from "@/components/ChecklistCards";
 import TranscriptViewer from "@/components/TranscriptViewer";
@@ -10,7 +10,15 @@ import HistorySidebar from "@/components/HistorySidebar";
 import CallNotes from "@/components/CallNotes";
 import CallSummary from "@/components/CallSummary";
 import AudioPlayer from "@/components/AudioPlayer";
-import { analyzeTranscript, TopicResult, TOPICS } from "@/lib/topics";
+import {
+  analyzeTranscript,
+  detectCallType,
+  detectMoveSize,
+  getScoreMetrics,
+  TopicResult,
+  TOPICS,
+  DEFAULT_RATES,
+} from "@/lib/topics";
 import { saveCall, loadHistory, updateCallNotes, CallRecord, makeId } from "@/lib/history";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -18,7 +26,10 @@ const DEFAULT_SETTINGS: Settings = {
   failBehavior: "show-missed",
   trackRep: false,
   customKeywords: {},
+  activeRates: DEFAULT_RATES,
 };
+
+const SETTINGS_STORAGE_KEY = "codex_settings_v1";
 
 export default function Home() {
   const [transcript, setTranscript] = useState<string | null>(null);
@@ -36,17 +47,37 @@ export default function Home() {
   const [currentCallId, setCurrentCallId] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [callType, setCallType] = useState("unknown");
+  const [moveSize, setMoveSize] = useState("unknown");
 
   const [repName, setRepName] = useState("");
+  const [customerName, setCustomerName] = useState("");
   const [callDate, setCallDate] = useState(new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored) as Partial<Settings>;
+      setSettings((prev) => ({ ...prev, ...parsed }));
+    } catch {
+      // noop
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  }, [settings]);
 
   const handleTranscript = useCallback(
     async (text: string, file?: File) => {
       setTranscript(text);
       if (file) setAudioFile(file);
-      const allResults = analyzeTranscript(text, settings.customKeywords);
+      const allResults = analyzeTranscript(text, settings.customKeywords, settings.activeRates);
       const filtered = allResults.filter((r) => settings.enabledTopicIds.includes(r.topic.id));
       setResults(filtered);
+      setCallType(detectCallType(text));
+      setMoveSize(detectMoveSize(text));
       setActiveTopicId(null);
       setNotes("");
       setSaved(false);
@@ -88,18 +119,23 @@ export default function Home() {
     setCurrentCallId(null);
     setSummary("");
     setSummaryLoading(false);
+    setCallType("unknown");
+    setMoveSize("unknown");
+    setCustomerName("");
   }
 
   function handleSaveCall(): string | null {
     if (!transcript) return null;
-    const passed = results.filter((r) => r.passed).length;
-    const score = Math.round((passed / (results.length || 1)) * 100);
+    const score = getScoreMetrics(results).pct;
     const id = makeId();
     const record: CallRecord = {
       id,
       date: new Date().toISOString(),
       repName,
+      customerName,
       callDate,
+      callType,
+      moveSize,
       transcript,
       results,
       notes,
@@ -130,7 +166,10 @@ export default function Home() {
     setResults(record.results);
     setNotes(record.notes);
     setRepName(record.repName);
+    setCustomerName((record as CallRecord & { customerName?: string }).customerName ?? "");
     setCallDate(record.callDate);
+    setCallType(record.callType ?? detectCallType(record.transcript));
+    setMoveSize(record.moveSize ?? detectMoveSize(record.transcript));
     setActiveTopicId(null);
     setSaved(true);
     setAudioFile(null);
@@ -146,13 +185,14 @@ export default function Home() {
 
   function copySummary() {
     if (!results.length) return;
-    const passed = results.filter((r) => r.passed).length;
-    const score = Math.round((passed / results.length) * 100);
+    const scoredMetrics = getScoreMetrics(results);
     const lines = [
       `CodeX Sales Call Review`,
       repName ? `Rep: ${repName}` : "",
+      customerName ? `Customer: ${customerName}` : "",
       callDate ? `Date: ${callDate}` : "",
-      `Score: ${score}% (${passed}/${results.length} topics)`,
+      `Type: ${callType} / ${moveSize}`,
+      `Score: ${scoredMetrics.pct}% (${scoredMetrics.passed}/${scoredMetrics.total} required topics)`,
       "",
       ...results.map(
         (r) =>
@@ -175,7 +215,7 @@ export default function Home() {
     window.print();
   }
 
-  const failedTopics = results.filter((r) => !r.passed);
+  const failedTopics = results.filter((r) => !r.passed && !r.topic.missNeutral && !r.topic.warnOnPass);
   const showFlagBanner =
     settings.failBehavior === "flag-review" && failedTopics.length > 0 && !!transcript;
 
@@ -327,6 +367,16 @@ export default function Home() {
                     />
                   </div>
                   <div>
+                    <label className="text-xs text-white/40 mb-1 block">Customer</label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="e.g. Sarah Johnson"
+                      className="w-full rounded-lg bg-white/5 border border-white/10 text-white text-sm px-3 py-2 placeholder-white/20 focus:outline-none focus:border-violet-500/50 transition"
+                    />
+                  </div>
+                  <div>
                     <label className="text-xs text-white/40 mb-1 block">Call Date</label>
                     <input
                       type="date"
@@ -360,7 +410,7 @@ export default function Home() {
           /* ── Results screen ── */
           <div className="space-y-5 animate-fade-in-up">
             {/* Rep badge */}
-            {(repName || callDate) && (
+            {(repName || customerName || callDate) && (
               <div className="flex items-center gap-3 flex-wrap">
                 {repName && (
                   <span className="text-xs text-white/50 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
@@ -374,6 +424,12 @@ export default function Home() {
                     <span className="text-white font-semibold">{callDate}</span>
                   </span>
                 )}
+                <span className="text-xs text-white/50 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
+                  Type: <span className="text-white font-semibold uppercase">{callType}</span>
+                </span>
+                <span className="text-xs text-white/50 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
+                  Move: <span className="text-white font-semibold uppercase">{moveSize}</span>
+                </span>
                 {saved && (
                   <span className="text-xs text-emerald-400/70 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5">
                     ✓ Saved to history

@@ -2,12 +2,13 @@ export interface Topic {
   id: string;
   label: string;
   keywords: string[];
-  patterns: Array<{ regex: string; label: string }>;
+  patterns: Array<{ regex: string; label: string; forRate?: number }>;
   color: string;
   bgColor: string;
   borderColor: string;
-  missLabel?: string;    // shown in UI when not detected
-  missNeutral?: boolean; // amber instead of red when missed
+  missLabel?: string;
+  missNeutral?: boolean;
+  warnOnPass?: boolean;
 }
 
 export interface TopicResult {
@@ -17,106 +18,81 @@ export interface TopicResult {
   positions: Array<{ start: number; end: number; word: string }>;
 }
 
-// ─── Hourly rate patterns ───────────────────────────────────────────────────
-// Handles: exact numbers ($185, 185), Whisper decimal errors (1.85),
-// and verbal forms ("one eighty five") for each known rate.
-const RATE_PATTERNS: Array<{ regex: string; label: string }> = [
-  // Exact numeric: 185, $185, 185.00
-  { regex: "\\$?\\b185\\b(?:\\.00)?", label: "$185/hr" },
-  { regex: "\\$?\\b169\\b(?:\\.00)?", label: "$169/hr" },
-  { regex: "\\$?\\b219\\b(?:\\.00)?", label: "$219/hr" },
-  { regex: "\\$?\\b250\\b(?:\\.00)?", label: "$250/hr" },
-  { regex: "\\$?\\b249\\b(?:\\.00)?", label: "$249/hr" },
-  { regex: "\\$?\\b329\\b(?:\\.00)?", label: "$329/hr" },
-  { regex: "\\$?\\b399\\b(?:\\.00)?", label: "$399/hr" },
-  { regex: "\\$?\\b419\\b(?:\\.00)?", label: "$419/hr" },
-  { regex: "\\$?\\b460\\b(?:\\.00)?", label: "$460/hr" },
-  { regex: "\\$?\\b523\\b(?:\\.00)?", label: "$523/hr" },
-  { regex: "\\$?\\b583\\b(?:\\.00)?", label: "$583/hr" },
+export const DEFAULT_RATES = [185, 169, 219, 250, 249, 329, 399, 419, 460, 523, 583];
 
-  // Whisper decimal transcription errors (e.g. 1.85 instead of $185)
-  { regex: "\\b1\\.85\\b", label: "$185/hr (alt)" },
-  { regex: "\\b1\\.69\\b", label: "$169/hr (alt)" },
-  { regex: "\\b2\\.19\\b", label: "$219/hr (alt)" },
-  { regex: "\\b2\\.5(?:0)?\\b", label: "$250/hr (alt)" },
-  { regex: "\\b2\\.49\\b", label: "$249/hr (alt)" },
-  { regex: "\\b3\\.29\\b", label: "$329/hr (alt)" },
-  { regex: "\\b3\\.99\\b", label: "$399/hr (alt)" },
-  { regex: "\\b4\\.19\\b", label: "$419/hr (alt)" },
-  { regex: "\\b4\\.6(?:0)?\\b", label: "$460/hr (alt)" },
-  { regex: "\\b5\\.23\\b", label: "$523/hr (alt)" },
-  { regex: "\\b5\\.83\\b", label: "$583/hr (alt)" },
-
-  // Verbal forms — spoken numbers Whisper might transcribe as words
-  { regex: "\\bone\\s+eighty[\\s-]five\\b", label: "$185 (spoken)" },
-  { regex: "\\bone\\s+hundred(?:\\s+and)?\\s+eighty[\\s-]five\\b", label: "$185 (spoken)" },
-  { regex: "\\bone\\s+sixty[\\s-]nine\\b", label: "$169 (spoken)" },
-  { regex: "\\bone\\s+hundred(?:\\s+and)?\\s+sixty[\\s-]nine\\b", label: "$169 (spoken)" },
-  { regex: "\\btwo\\s+nineteen\\b", label: "$219 (spoken)" },
-  { regex: "\\btwo\\s+hundred(?:\\s+and)?\\s+nineteen\\b", label: "$219 (spoken)" },
-  { regex: "\\btwo\\s+fifty\\b", label: "$250 (spoken)" },
-  { regex: "\\btwo\\s+hundred(?:\\s+and)?\\s+fifty\\b", label: "$250 (spoken)" },
-  { regex: "\\btwo\\s+forty[\\s-]nine\\b", label: "$249 (spoken)" },
-  { regex: "\\btwo\\s+hundred(?:\\s+and)?\\s+forty[\\s-]nine\\b", label: "$249 (spoken)" },
-  { regex: "\\bthree\\s+twenty[\\s-]nine\\b", label: "$329 (spoken)" },
-  { regex: "\\bthree\\s+hundred(?:\\s+and)?\\s+twenty[\\s-]nine\\b", label: "$329 (spoken)" },
-  { regex: "\\bthree\\s+ninety[\\s-]nine\\b", label: "$399 (spoken)" },
-  { regex: "\\bthree\\s+hundred(?:\\s+and)?\\s+ninety[\\s-]nine\\b", label: "$399 (spoken)" },
-  { regex: "\\bfour\\s+nineteen\\b", label: "$419 (spoken)" },
-  { regex: "\\bfour\\s+hundred(?:\\s+and)?\\s+nineteen\\b", label: "$419 (spoken)" },
-  { regex: "\\bfour\\s+sixty\\b", label: "$460 (spoken)" },
-  { regex: "\\bfour\\s+hundred(?:\\s+and)?\\s+sixty\\b", label: "$460 (spoken)" },
-  { regex: "\\bfive\\s+twenty[\\s-]three\\b", label: "$523 (spoken)" },
-  { regex: "\\bfive\\s+hundred(?:\\s+and)?\\s+twenty[\\s-]three\\b", label: "$523 (spoken)" },
-  { regex: "\\bfive\\s+eighty[\\s-]three\\b", label: "$583 (spoken)" },
-  { regex: "\\bfive\\s+hundred(?:\\s+and)?\\s+eighty[\\s-]three\\b", label: "$583 (spoken)" },
-
-  // Fee types mentioned in pricing context
-  { regex: "\\bservice\\s+fee\\b", label: "service fee" },
-  { regex: "\\bvehicle\\s+maintenance\\b", label: "vehicle maintenance" },
-  { regex: "\\bfuel\\s+surcharge\\b", label: "fuel surcharge" },
-];
-
-// ─── Insurance / coverage patterns ──────────────────────────────────────────
-const COVERAGE_PATTERNS: Array<{ regex: string; label: string }> = [
-  { regex: "\\badded\\s+coverage\\b", label: "added coverage" },
-  { regex: "\\bfull\\s+coverage\\b", label: "full coverage" },
-  { regex: "\\bcoverage\\b", label: "coverage" },
-  // .60/lb or "sixty cents per pound" — weight-based valuation pricing
-  { regex: "\\.60\\s*(?:cents?)?\\s*(?:per|to\\s+the)\\s*(?:pound|lb|lbs?)\\b", label: ".60/lb" },
-  { regex: "\\bsixty\\s+cents?\\s*(?:per|to\\s+the)\\s*(?:pound|lb|lbs?)\\b", label: ".60/lb" },
-  { regex: "\\b60\\s+cents?\\s*(?:per|to\\s+the)\\s*(?:pound|lb|lbs?)\\b", label: ".60/lb" },
-];
-
-// ─── Credit card / deposit patterns ─────────────────────────────────────────
-// ONLY triggers if an actual credit card was given on the call.
-const CARD_PATTERNS: Array<{ regex: string; label: string }> = [
-  { regex: "\\bcredit\\s+card\\b", label: "credit card" },
-  { regex: "\\bdebit\\s+card\\b", label: "debit card" },
-  { regex: "\\bran\\s+(?:the\\s+|your\\s+)?card\\b", label: "ran the card" },
-  { regex: "\\bcard\\s+on\\s+file\\b", label: "card on file" },
-  { regex: "\\bput\\s+(?:your\\s+|the\\s+)?card\\b", label: "put card on file" },
-  { regex: "\\bprocess(?:ed|ing)?\\s+(?:your\\s+|the\\s+)?card\\b", label: "card processed" },
-  { regex: "\\bcard\\s+number\\b", label: "card number given" },
-  { regex: "\\bcharg(?:ed|ing)\\s+(?:your\\s+|the\\s+)?card\\b", label: "card charged" },
-  { regex: "\\bswipe[ds]?\\s+(?:your\\s+|the\\s+)?card\\b", label: "card swiped" },
+const RATE_PATTERNS: Array<{ regex: string; label: string; forRate: number }> = [
+  { regex: "\\$?\\b185\\b(?:\\.00)?", label: "$185/hr", forRate: 185 },
+  { regex: "\\$?\\b169\\b(?:\\.00)?", label: "$169/hr", forRate: 169 },
+  { regex: "\\$?\\b219\\b(?:\\.00)?", label: "$219/hr", forRate: 219 },
+  { regex: "\\$?\\b250\\b(?:\\.00)?", label: "$250/hr", forRate: 250 },
+  { regex: "\\$?\\b249\\b(?:\\.00)?", label: "$249/hr", forRate: 249 },
+  { regex: "\\$?\\b329\\b(?:\\.00)?", label: "$329/hr", forRate: 329 },
+  { regex: "\\$?\\b399\\b(?:\\.00)?", label: "$399/hr", forRate: 399 },
+  { regex: "\\$?\\b419\\b(?:\\.00)?", label: "$419/hr", forRate: 419 },
+  { regex: "\\$?\\b460\\b(?:\\.00)?", label: "$460/hr", forRate: 460 },
+  { regex: "\\$?\\b523\\b(?:\\.00)?", label: "$523/hr", forRate: 523 },
+  { regex: "\\$?\\b583\\b(?:\\.00)?", label: "$583/hr", forRate: 583 },
 ];
 
 export const TOPICS: Topic[] = [
   {
     id: "price",
     label: "Hourly Rate Quoted",
-    keywords: ["per hour", "hourly rate", "our rate", "the rate is", "rates are"],
-    patterns: RATE_PATTERNS,
+    keywords: ["per hour", "hourly rate", "the rate is", "rates are"],
+    patterns: [
+      ...RATE_PATTERNS,
+      { regex: "\\bservice\\s+fee\\b", label: "service fee" },
+      { regex: "\\bfuel\\s+surcharge\\b", label: "fuel surcharge" },
+    ],
     color: "text-blue-400",
     bgColor: "bg-blue-500/20",
     borderColor: "border-blue-500",
   },
   {
+    id: "minimumhours",
+    label: "Minimum Hours",
+    keywords: ["minimum", "three hour minimum", "2 hour minimum"],
+    patterns: [
+      { regex: "\\b(?:two|2)[-\\s]?hour\\s+minimum\\b", label: "2-hour minimum" },
+      { regex: "\\b(?:three|3)[-\\s]?hour\\s+minimum\\b", label: "3-hour minimum" },
+      { regex: "\\bminimum\\s+charge\\b", label: "minimum charge" },
+    ],
+    color: "text-cyan-400",
+    bgColor: "bg-cyan-500/20",
+    borderColor: "border-cyan-500",
+  },
+  {
+    id: "crewsize",
+    label: "Crew Size Quoted",
+    keywords: ["movers", "crew", "guys", "team"],
+    patterns: [
+      { regex: "\\b(?:two|2)\\s+(?:movers?|men|guys|person\\s+crew)\\b", label: "2-person crew" },
+      { regex: "\\b(?:three|3)\\s+(?:movers?|men|guys|person\\s+crew)\\b", label: "3-person crew" },
+      { regex: "\\b(?:four|4)\\s+(?:movers?|men|guys|person\\s+crew)\\b", label: "4-person crew" },
+    ],
+    color: "text-indigo-400",
+    bgColor: "bg-indigo-500/20",
+    borderColor: "border-indigo-500",
+  },
+  {
+    id: "flatrate",
+    label: "Flat Rate / Guaranteed Price",
+    keywords: ["flat rate", "guaranteed price", "not to exceed"],
+    patterns: [{ regex: "\\bguarantee(?:d)?\\s+price\\b", label: "guaranteed price" }],
+    color: "text-amber-300",
+    bgColor: "bg-amber-500/20",
+    borderColor: "border-amber-500",
+    missLabel: "N/A",
+    missNeutral: true,
+  },
+  {
     id: "insurance",
     label: "Insurance / Coverage",
-    keywords: ["insurance", "insured", "liability"],
-    patterns: COVERAGE_PATTERNS,
+    keywords: ["insurance", "coverage", "liability"],
+    patterns: [
+      { regex: "\\.60\\s*(?:cents?)?\\s*(?:per|/)\\s*(?:pound|lb|lbs?)", label: ".60/lb" },
+      { regex: "\\bfull\\s+value\\s+protection\\b", label: "full value protection" },
+    ],
     color: "text-purple-400",
     bgColor: "bg-purple-500/20",
     borderColor: "border-purple-500",
@@ -124,53 +100,87 @@ export const TOPICS: Topic[] = [
   {
     id: "payment",
     label: "Deposit Collected",
-    keywords: [],
-    patterns: CARD_PATTERNS,
+    keywords: ["credit card", "debit card", "card on file"],
+    patterns: [
+      { regex: "\\bcard\\s+number\\b", label: "card details taken" },
+      { regex: "\\bcharg(?:ed|ing)\\s+(?:your\\s+)?card\\b", label: "card charged" },
+    ],
     color: "text-emerald-400",
     bgColor: "bg-emerald-500/20",
     borderColor: "border-emerald-500",
     missLabel: "NOT THIS CALL",
     missNeutral: true,
   },
+  {
+    id: "multiplestops",
+    label: "Multiple Stops",
+    keywords: ["second stop", "multiple stops", "extra stop"],
+    patterns: [
+      { regex: "\\b(?:two|2)\\s+stops?\\b", label: "2 stops" },
+      { regex: "\\bstorage\\s+stop\\b", label: "storage stop" },
+    ],
+    color: "text-orange-400",
+    bgColor: "bg-orange-500/20",
+    borderColor: "border-orange-500",
+    missLabel: "N/A",
+    missNeutral: true,
+  },
+  {
+    id: "redflag",
+    label: "Unusual Promise",
+    keywords: ["on the house", "make an exception", "free of charge"],
+    patterns: [
+      { regex: "\\b(?:i['’]?ll|we['’]?ll)\\s+waive\\b", label: "waive fee promise" },
+      { regex: "\\bdon['’]?t\\s+worry\\s+about\\s+the\\s+fee\\b", label: "fee waived language" },
+      { regex: "\\b(?:i\s+promise|i\s+guarantee)\\s+the\\s+price\\b", label: "price guarantee promise" },
+      { regex: "\\b(?:we['’]?ll\\s+eat\\s+the\\s+cost|won['’]?t\\s+charge\\s+for\\s+that)\\b", label: "eat the cost" },
+    ],
+    color: "text-red-400",
+    bgColor: "bg-red-500/20",
+    borderColor: "border-red-500",
+    missLabel: "CLEAN",
+    missNeutral: true,
+    warnOnPass: true,
+  },
 ];
 
 export function analyzeTranscript(
   transcript: string,
-  customKeywords: Record<string, string[]> = {}
+  customKeywords: Record<string, string[]> = {},
+  activeRates: number[] = DEFAULT_RATES
 ): TopicResult[] {
   return TOPICS.map((topic) => {
     const matches: string[] = [];
     const positions: Array<{ start: number; end: number; word: string }> = [];
 
-    // 1. Keyword matching (word-boundary safe)
     const allKeywords = [...topic.keywords, ...(customKeywords[topic.id] ?? [])];
     for (const keyword of allKeywords) {
       const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(`\\b${escaped}\\b`, "gi");
-      let m;
+      let m: RegExpExecArray | null;
       while ((m = regex.exec(transcript)) !== null) {
         if (!matches.includes(keyword)) matches.push(keyword);
         positions.push({ start: m.index, end: m.index + m[0].length, word: m[0] });
       }
     }
 
-    // 2. Pattern matching (custom regex with friendly labels)
-    for (const { regex: regexStr, label } of topic.patterns ?? []) {
+    for (const { regex: regexStr, label, forRate } of topic.patterns ?? []) {
+      if (topic.id === "price" && forRate && !activeRates.includes(forRate)) {
+        continue;
+      }
       try {
         const regex = new RegExp(regexStr, "gi");
-        let m;
+        let m: RegExpExecArray | null;
         while ((m = regex.exec(transcript)) !== null) {
           if (!matches.includes(label)) matches.push(label);
           positions.push({ start: m.index, end: m.index + m[0].length, word: m[0] });
         }
       } catch {
-        // Skip invalid regex patterns
+        continue;
       }
     }
 
-    const deduped = positions.filter(
-      (p, i, arr) => !arr.slice(0, i).some((q) => q.start === p.start)
-    );
+    const deduped = positions.filter((p, i, arr) => !arr.slice(0, i).some((q) => q.start === p.start));
 
     return {
       topic,
@@ -179,6 +189,33 @@ export function analyzeTranscript(
       positions: deduped.sort((a, b) => a.start - b.start),
     };
   });
+}
+
+export function getScoreMetrics(results: TopicResult[]) {
+  const scored = results.filter((r) => !r.topic.warnOnPass && !r.topic.missNeutral);
+  const passed = scored.filter((r) => r.passed).length;
+  const total = scored.length;
+  const pct = total === 0 ? 0 : Math.round((passed / total) * 100);
+  return { passed, total, pct };
+}
+
+export function detectCallType(transcript: string) {
+  const input = transcript.toLowerCase();
+  if (/\b(interstate|out of state|cross-country)\b/.test(input)) return "interstate";
+  if (/\b(long[-\s]?distance)\b/.test(input)) return "long-distance";
+  if (/\b(storage\s+only|storage\s+move)\b/.test(input)) return "storage";
+  if (/\b(local|hourly)\b/.test(input)) return "local-hourly";
+  return "unknown";
+}
+
+export function detectMoveSize(transcript: string) {
+  const input = transcript.toLowerCase();
+  if (/\b(studio)\b/.test(input)) return "studio";
+  if (/\b(one|1)\s*(bed(room)?|br)\b/.test(input)) return "1br";
+  if (/\b(two|2)\s*(bed(room)?|br)\b/.test(input)) return "2br";
+  if (/\b(three|3)\s*(bed(room)?|br)\b/.test(input)) return "3br";
+  if (/\b(four|4|five|5)\s*(bed(room)?|br)\b/.test(input)) return "4br+";
+  return "unknown";
 }
 
 export function buildHighlightedSegments(
@@ -209,11 +246,7 @@ export function buildHighlightedSegments(
     if (span.start > cursor) {
       segments.push({ text: transcript.slice(cursor, span.start), topicId: null, word: null });
     }
-    segments.push({
-      text: transcript.slice(span.start, span.end),
-      topicId: span.topicId,
-      word: span.word,
-    });
+    segments.push({ text: transcript.slice(span.start, span.end), topicId: span.topicId, word: span.word });
     cursor = span.end;
   }
 

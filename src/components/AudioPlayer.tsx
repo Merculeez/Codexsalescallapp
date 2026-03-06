@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface Props {
   file: File;
@@ -11,13 +11,9 @@ export default function AudioPlayer({ file }: Props) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [url, setUrl] = useState<string | null>(null);
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
 
-  useEffect(() => {
-    const objectUrl = URL.createObjectURL(file);
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
 
   function toggle() {
     const audio = audioRef.current;
@@ -53,15 +49,14 @@ export default function AudioPlayer({ file }: Props) {
 
   return (
     <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 flex items-center gap-4">
-      {url && (
-        <audio
-          ref={audioRef}
-          src={url}
-          onTimeUpdate={onTimeUpdate}
-          onLoadedMetadata={onLoadedMetadata}
-          onEnded={onEnded}
-        />
-      )}
+      <audio
+        key={url}
+        ref={audioRef}
+        src={url}
+        onTimeUpdate={onTimeUpdate}
+        onLoadedMetadata={onLoadedMetadata}
+        onEnded={onEnded}
+      />
 
       {/* Play/pause */}
       <button

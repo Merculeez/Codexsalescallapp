@@ -2,13 +2,16 @@ import { TopicResult } from "./topics";
 
 export interface CallRecord {
   id: string;
-  date: string;         // ISO string
+  date: string;
   repName: string;
-  callDate: string;     // user-selected date
+  customerName?: string;
+  callDate: string;
+  callType?: string;
+  moveSize?: string;
   transcript: string;
   results: TopicResult[];
   notes: string;
-  score: number;        // 0-100
+  score: number;
   passed: boolean;
 }
 
@@ -25,8 +28,8 @@ export function loadHistory(): CallRecord[] {
 
 export function saveCall(record: CallRecord): void {
   const history = loadHistory();
-  history.unshift(record); // newest first
-  localStorage.setItem(KEY, JSON.stringify(history.slice(0, 100))); // keep last 100
+  history.unshift(record);
+  localStorage.setItem(KEY, JSON.stringify(history.slice(0, 100)));
 }
 
 export function deleteCall(id: string): void {
